@@ -1,0 +1,37 @@
+<div class="page-header">
+  <h1 class="page-title">Activiteitenlog</h1>
+  <p class="page-subtitle">Overzicht van administratieve bewerkingen.</p>
+</div>
+
+<div class="section">
+  <div class="table-wrap">
+    <table id="logs-table">
+      <thead>
+        <tr><th>Tijd</th><th>Gebruiker</th><th>Actie</th><th>Beschrijving</th><th>Status</th><th>IP</th></tr>
+      </thead>
+      <tbody id="logs-tbody"><tr><td colspan="6" class="empty" style="padding:24px">Laden…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadLogs() {
+  const tbody = document.getElementById('logs-tbody');
+  try {
+    const { logs } = await apiRequest('/logs?limit=100');
+    tbody.innerHTML = logs.map(l => `
+      <tr>
+        <td>${formatDate(l.created_at)}</td>
+        <td>${l.username}</td>
+        <td><code>${l.action}</code></td>
+        <td>${l.description}</td>
+        <td><span class="badge ${l.status === 'success' ? 'badge-success' : 'badge-danger'}">${l.status}</span></td>
+        <td>${l.ip_address || '—'}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="empty" style="padding:24px">Geen logvermeldingen.</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="padding:24px">Fout: ${e.message}</td></tr>`;
+  }
+}
+loadLogs();
+</script>

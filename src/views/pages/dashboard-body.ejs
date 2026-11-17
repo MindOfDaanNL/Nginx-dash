@@ -1,0 +1,107 @@
+<div class="page-header">
+  <h1 class="page-title">Dashboard</h1>
+  <p class="page-subtitle">Overzicht van de Nginx-server en certificaten.</p>
+</div>
+
+<div class="stats-grid" id="stats-grid">
+  <div class="stat-card">
+    <span class="stat-label">Totale configuraties</span>
+    <span class="stat-value" id="stat-total">—</span>
+    <span class="stat-delta neutral" id="stat-total-delta"></span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Ingeschakeld</span>
+    <span class="stat-value" id="stat-enabled">—</span>
+    <span class="stat-delta ok" id="stat-enabled-delta"></span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Uitgeschakeld</span>
+    <span class="stat-value" id="stat-disabled">—</span>
+    <span class="stat-delta neutral" id="stat-disabled-delta"></span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Actieve SSL-certificaten</span>
+    <span class="stat-value" id="stat-ssl">—</span>
+    <span class="stat-delta ok" id="stat-ssl-delta"></span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Vervallen binnen 30 dagen</span>
+    <span class="stat-value" id="stat-expiring">—</span>
+    <span class="stat-delta warning" id="stat-expiring-delta"></span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Verlopen certificaten</span>
+    <span class="stat-value" id="stat-expired">—</span>
+    <span class="stat-delta bad" id="stat-expired-delta"></span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Nginx-service</h2>
+    <div class="section-actions">
+      <button class="btn btn-sm btn-outline" onclick="loadStats()">Verversen</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Onderdeel</th><th>Waarde</th><th>Status</th></tr>
+      </thead>
+      <tbody id="nginx-status-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Recente activiteit</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Tijd</th><th>Gebruiker</th><th>Actie</th><th>Status</th></tr>
+      </thead>
+      <tbody id="activity-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadStats() {
+  try {
+    const { stats } = await apiRequest('/dashboard/stats');
+    document.getElementById('stat-total').textContent = stats.totalConfigs;
+    document.getElementById('stat-enabled').textContent = stats.enabledConfigs;
+    document.getElementById('stat-disabled').textContent = stats.disabledConfigs;
+    document.getElementById('stat-ssl').textContent = stats.activeSsl;
+    document.getElementById('stat-expiring').textContent = stats.expiringSoon;
+    document.getElementById('stat-expired').textContent = stats.expired;
+
+    const tbody = document.getElementById('nginx-status-table');
+    const n = stats.nginx;
+    tbody.innerHTML = `
+      <tr><td>Status</td><td>${n.running ? 'Draaiend' : 'Gestopt'}</td><td><span class="badge ${n.running ? 'badge-success' : 'badge-danger'}">${n.running ? 'Online' : 'Offline'}</span></td></tr>
+      <tr><td>Versie</td><td>${n.version || '—'}</td><td><span class="badge badge-neutral">${n.code === 0 ? 'OK' : 'Onbekend'}</span></td></tr>
+    `;
+
+    const { activity } = await apiRequest('/dashboard/activity?limit=10');
+    const atbody = document.getElementById('activity-table');
+    if (!activity.length) {
+      atbody.innerHTML = '<tr><td colspan="4" class="empty" style="padding:16px">Geen activiteit</td></tr>';
+    } else {
+      atbody.innerHTML = activity.map(a => `
+        <tr>
+          <td>${formatDate(a.created_at)}</td>
+          <td>${a.username}</td>
+          <td>${a.action}</td>
+          <td><span class="badge ${a.status === 'success' ? 'badge-success' : 'badge-danger'}">${a.status}</span></td>
+        </tr>
+      `).join('');
+    }
+  } catch (e) {
+    alert('Kon stats niet laden: ' + e.message);
+  }
+}
+loadStats();
+</script>

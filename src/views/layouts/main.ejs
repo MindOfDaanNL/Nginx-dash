@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<%- include('../partials/head', { title }) %>
+</head>
+<body class="app">
+  <div class="app-wrapper">
+    <%- include('../partials/header', { user }) %>
+    <div class="app-body">
+      <%- include('../partials/sidebar', { user, activePage }) %>
+      <main class="app-main">
+        <div class="container">
+          <%- include('../partials/flash') %>
+          <%- include('../' + content) %>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/js/app.js"></script>
+  <%- include('../partials/scripts') %>
+</body>
+</html>

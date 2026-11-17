@@ -1,0 +1,30 @@
+<header class="app-header">
+  <div class="header-brand">
+    <span class="brand-mark">N</span>
+    <span class="brand-name"><%- appName %></span>
+  </div>
+  <div class="header-controls">
+    <div class="header-item header-status" id="header-nginx-status">
+      <i data-lucide="circle" class="icon status-dot"></i>
+      <span class="status-text">Nginx: <span id="nginx-status-text">—</span></span>
+    </div>
+    <div class="header-item header-user">
+      <span class="user-role"><%= user.role %></span>
+      <span class="user-name"><%= user.username %></span>
+      <button class="btn btn-icon btn-outline" id="user-menu-btn" aria-label="Account menu">
+        <i data-lucide="menu"></i>
+      </button>
+      <a href="/api/auth/logout" method="post" class="btn btn-outline">Uitloggen</a>
+    </div>
+  </div>
+</header>
+
+<script>
+document.getElementById('user-menu-btn').addEventListener('click', () => {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/api/auth/logout';
+  document.body.appendChild(form);
+  form.submit();
+});
+</script>

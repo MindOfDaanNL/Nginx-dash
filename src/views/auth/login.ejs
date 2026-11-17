@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head><%- include('../partials/head', { title }) %></head>
+<body class="app">
+  <div class="app-wrapper" style="height:100vh;">
+    <div style="display:flex; align-items:center; justify-content:center; height:100%; width:100%; background:var(--surface); border-right:1px solid var(--border); width:360px;">
+      <div style="width:100%; max-width:320px; padding:24px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div class="brand-mark" style="width:24px;height:24px;font-size:12px;">N</div>
+          <span class="brand-name" style="font-size:18px;"><%- appName %></span>
+        </div>
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;">Inloggen</h2>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Voer uw inloggegevens in.</p>
+        <% if (flash && flash.error) { %>
+          <div class="flash flash-error" style="margin-bottom:16px;"><%= flash.error %></div>
+        <% } %>
+        <form id="login-form" novalidate>
+          <div class="field">
+            <label>Gebruikersnaam</label>
+            <input type="text" name="username" required autofocus>
+          </div>
+          <div class="field" style="margin-top:16px;">
+            <label>Wachtwoord</label>
+            <input type="password" name="password" required>
+          </div>
+          <div style="margin-top:20px;">
+            <button class="btn btn-primary" style="width:100%;" id="login-btn">Inloggen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div style="flex:1; background:var(--bg);"></div>
+  </div>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true; btn.textContent = 'Bezig…';
+      try {
+        await apiRequest('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: e.target.username.value,
+            password: e.target.password.value
+          })
+        });
+        window.location.href = '/';
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Inloggen';
+        alert(err.data?.error || 'Inloggen mislukt');
+      }
+    });
+  </script>
+</body>
+</html>

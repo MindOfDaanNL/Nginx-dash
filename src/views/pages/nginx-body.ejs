@@ -1,0 +1,199 @@
+<div class="page-header">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <h1 class="page-title">Nginx-configuraties</h1>
+      <p class="page-subtitle">Beheer virtuele hosts op de Nginx-server.</p>
+    </div>
+    <% if (user.role === 'admin') { %>
+    <button class="btn btn-primary" onclick="openCreateModal()">Nieuwe configuratie</button>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="table-wrap">
+    <table id="configs-table">
+      <thead>
+        <tr>
+          <th>Naam</th>
+          <th>Domeinen</th>
+          <th>Bestand</th>
+          <th>SSL</th>
+          <th>Status</th>
+          <th>Aangepast</th>
+          <th>Acties</th>
+        </tr>
+      </thead>
+      <tbody id="configs-tbody">
+        <tr><td colspan="7" class="empty" style="padding:24px">Configuraties laden…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create modal -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Nieuwe Nginx-configuratie</span><button class="close-btn" onclick="closeCreateModal()">&times;</button></div>
+    <div class="modal-body">
+      <form id="create-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label>Configuratienaam</label>
+            <input type="text" name="name" required placeholder="bijv. example-com">
+          </div>
+          <div class="field row">
+            <label>Domeinen (komma gescheiden)</label>
+            <input type="text" name="domains" required placeholder="example.com, www.example.com">
+          </div>
+          <div class="field">
+            <label>Luisterpoort</label>
+            <input type="number" name="port" value="80" required min="1" max="65535">
+          </div>
+          <div class="field">
+            <label>Server type</label>
+            <select name="serverType">
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Document root</label>
+            <input type="text" name="documentRoot" value="/var/www/html">
+          </div>
+          <div class="field">
+            <label>Proxy-pass URL (optioneel)</label>
+            <input type="text" name="proxyPass" placeholder="http://127.0.0.1:3000">
+          </div>
+          <div class="field row">
+            <label>Sjabloon</label>
+            <select name="template" id="template-select">
+              <option value="static">Statische website</option>
+              <option value="node">Node.js reverse proxy</option>
+              <option value="php">PHP-website</option>
+              <option value="http">HTTP-only</option>
+              <option value="https">HTTPS</option>
+              <option value="custom">Aangepast</option>
+            </select>
+          </div>
+          <div class="field row" id="custom-options-field" style="display:none">
+            <label>Aangepaste Nginx-configuratie</label>
+            <textarea name="customOptions" rows="6" placeholder="Plak hier de volledige Nginx-configuratie"></textarea>
+          </div>
+          <div class="field">
+            <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" name="enabled" checked> Direct inschakelen en herladen
+            </label>
+          </div>
+        </div>
+        <div id="create-err" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCreateModal()">Annuleren</button>
+      <button class="btn btn-primary" id="create-submit">Maken</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const createModal = document.getElementById('create-modal');
+const templateSelect = document.getElementById('template-select');
+const customField = document.getElementById('custom-options-field');
+
+templateSelect.addEventListener('change', () => {
+  customField.style.display = templateSelect.value === 'custom' ? 'block' : 'none';
+});
+
+function openCreateModal() {
+  document.getElementById('create-form').reset();
+  templateSelect.dispatchEvent(new Event('change'));
+  document.getElementById('create-err').style.display = 'none';
+  createModal.classList.add('open');
+}
+function closeCreateModal() {
+  createModal.classList.remove('open');
+}
+window.addEventListener('click', (e) => { if (e.target === createModal) closeCreateModal(); });
+
+document.getElementById('create-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('create-submit');
+  const err = document.getElementById('create-err');
+  const form = e.target;
+  const domains = form.domains.value.split(',').map(d => d.trim()).filter(Boolean);
+  const body = {
+    name: form.name.value,
+    domains,
+    port: parseInt(form.port.value, 10),
+    serverType: form.serverType.value,
+    documentRoot: form.documentRoot.value,
+    proxyPass: form.proxyPass.value || undefined,
+    template: form.template.value,
+    customOptions: form.customOptions.value || undefined,
+    enabled: form.enabled.checked ? 1 : 0,
+  };
+  btn.disabled = true;
+  btn.textContent = 'Bezig…';
+  try {
+    await apiRequest('/nginx/configs', { method: 'POST', body: JSON.stringify(body) });
+    closeCreateModal();
+    loadConfigs();
+  } catch (errObj) {
+    err.textContent = errObj.data?.details || errObj.message || 'Mislukt';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Maken';
+  }
+});
+
+async function loadConfigs() {
+  const tbody = document.getElementById('configs-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="empty" style="padding:24px">Laden…</td></tr>';
+  try {
+    const { configs } = await apiRequest('/nginx/configs');
+    tbody.innerHTML = configs.map(c => `
+      <tr>
+        <td><strong>${c.name}</strong></td>
+        <td>${(c.domains || []).join(', ') || '—'}</td>
+        <td><code>${c.filename}</code></td>
+        <td><span class="badge ${c.sslEnabled ? 'badge-success' : 'badge-neutral'}">${c.sslEnabled ? 'SSL' : 'Geen'}</span></td>
+        <td><span class="badge ${c.enabled ? 'badge-success' : 'badge-danger'}">${c.enabled ? 'Aan' : 'Uit'}</span></td>
+        <td>${formatDate(c.updated_at)}</td>
+        <td>
+          <a href="/nginx/${c.id}" class="btn btn-sm btn-outline">Bekijken</a>
+          <% if (user.role === 'admin') { %>
+          <button class="btn btn-sm <%= c.enabled ? 'btn-outline' : 'btn-outline' %>" onclick="toggleConfig(${c.id}, ${!c.enabled})">${c.enabled ? 'Uitschakelen' : 'Inschakelen'}</button>
+          <button class="btn btn-sm btn-danger" onclick="removeConfig(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Verwijderen</button>
+          <% } %>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="7" class="empty" style="padding:24px">Geen configuraties gevonden.</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty" style="padding:24px">Fout: ${e.message}</td></tr>`;
+  }
+}
+
+async function toggleConfig(id, enable) {
+  try {
+    const endpoint = enable ? '/enable' : '/disable';
+    await apiRequest(`/nginx/configs/${id}${endpoint}`, { method: 'POST' });
+    loadConfigs();
+  } catch (e) {
+    alert('Wijzigen mislukt: ' + (e.data?.details || e.message));
+  }
+}
+
+async function removeConfig(id, name) {
+  if (!confirm(`Weet u zeker dat u "${name}" wilt verwijderen?`)) return;
+  try {
+    await apiRequest(`/nginx/configs/${id}`, { method: 'DELETE' });
+    loadConfigs();
+  } catch (e) {
+    alert('Verwijderen mislukt: ' + (e.data?.details || e.message));
+  }
+}
+
+loadConfigs();
+</script>

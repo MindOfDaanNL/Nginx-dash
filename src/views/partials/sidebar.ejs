@@ -1,0 +1,26 @@
+<aside class="app-sidebar">
+  <nav class="sidebar-nav">
+    <ul>
+      <li class="<%= activePage === 'dashboard' ? 'active' : '' %>">
+        <a href="/"><i data-lucide="layout-dashboard"></i> Dashboard</a>
+      </li>
+      <li class="<%= activePage === 'nginx' ? 'active' : '' %>">
+        <a href="/nginx"><i data-lucide="server"></i> Nginx-configuraties</a>
+      </li>
+      <li class="<%= activePage === 'ssl' ? 'active' : '' %>">
+        <a href="/ssl"><i data-lucide="lock"></i> SSL-certificaten</a>
+      </li>
+      <% if (user.role === 'admin') { %>
+      <li class="<%= activePage === 'logs' ? 'active' : '' %>">
+        <a href="/logs"><i data-lucide="activity"></i> Activiteitenlog</a>
+      </li>
+      <li class="<%= activePage === 'users' ? 'active' : '' %>">
+        <a href="/users"><i data-lucide="users"></i> Gebruikersbeheer</a>
+      </li>
+      <li class="<%= activePage === 'settings' ? 'active' : '' %>">
+        <a href="/settings"><i data-lucide="settings"></i> Instellingen</a>
+      </li>
+      <% } %>
+    </ul>
+  </nav>
+</aside>

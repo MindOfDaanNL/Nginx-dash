@@ -1,0 +1,128 @@
+<div class="page-header">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+    <div>
+      <h1 class="page-title">Configuratie: <span id="cfg-name">—</span></h1>
+      <p class="page-subtitle" id="cfg-subtitle"></p>
+    </div>
+    <% if (user.role === 'admin') { %>
+    <div class="section-actions" id="cfg-actions">
+      <button class="btn btn-sm btn-outline" onclick="toggleCfg(<%= configId === 'new' ? 0 : configId %>, false)" id="btn-disable">Uitschakelen</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleCfg(<%= configId === 'new' ? 0 : configId %>, true)" id="btn-enable">Inschakelen</button>
+      <button class="btn btn-sm btn-danger" onclick="removeCfg(<%= configId === 'new' ? 0 : configId %>)">Verwijderen</button>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<% if (user.role === 'admin') { %>
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Configuratie-editor</h2>
+    <div class="section-actions">
+      <button class="btn btn-sm btn-outline" onclick="validateCfg()">Configuratie testen</button>
+      <button class="btn btn-sm btn-outline" onclick="reloadCfg()">Nginx herladen</button>
+      <button class="btn btn-primary" onclick="saveCfg()">Opslaan</button>
+    </div>
+  </div>
+  <div class="editor-wrap">
+    <textarea id="cfg-editor" readonly spellcheck="false">Laden…</textarea>
+  </div>
+  <div id="cfg-msg" style="margin-top:10px; font-size:13px;"></div>
+</div>
+<% } else %>
+<div class="section">
+  <div class="section-header"><h2 class="section-title">Configuratiedetails</h2></div>
+  <div class="editor-wrap">
+    <textarea id="cfg-editor" readonly spellcheck="false">Laden…</textarea>
+  </div>
+</div>
+<% endif %>
+
+<script>
+const cfgId = <%= configId === 'new' ? 0 : parseInt(configId) || 0 %>;
+const isAdmin = <%- user.role === 'admin' %>;
+const editor = document.getElementById('cfg-editor');
+const msgEl = document.getElementById('cfg-msg');
+
+function showMsg(text, type) {
+  msgEl.textContent = text;
+  msgEl.className = type === 'success' ? '' : 'error-msg';
+  msgEl.style.color = type === 'success' ? 'var(--success)' : 'var(--danger)';
+}
+
+async function loadCfg() {
+  try {
+    const { config } = await apiRequest(`/nginx/configs/${cfgId}`);
+    document.getElementById('cfg-name').textContent = config.name;
+    document.getElementById('cfg-subtitle').textContent = config.filename + '  ·  ' + (config.domains || []).join(', ');
+    editor.value = config.content || '(geen inhoud)';
+    document.getElementById('btn-disable').disabled = !config.enabled;
+    document.getElementById('btn-enable').disabled = config.enabled;
+  } catch (e) {
+    editor.value = 'Kon configuratie niet laden: ' + e.message;
+  }
+}
+
+async function saveCfg() {
+  if (!isAdmin) return;
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Opslaan…';
+  try {
+    await apiRequest(`/nginx/configs/${cfgId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content: editor.value, enabled: document.getElementById('btn-enable').disabled ? 1 : 0 })
+    });
+    showMsg('Opgeslagen en Nginx herladen.', 'success');
+    loadCfg();
+  } catch (e) {
+    showMsg('Opslaan mislukt: ' + (e.data?.details || e.message), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Opslaan';
+  }
+}
+
+async function validateCfg() {
+  try {
+    const res = await apiRequest('/nginx/test', { method: 'POST' });
+    showMsg(res.valid ? 'Configuratie is geldig.' : 'Configuratie bevat fouten.', res.valid ? 'success' : 'error');
+    console.log(res.output, res.error);
+  } catch (e) {
+    showMsg('Test mislukt: ' + e.message, 'error');
+  }
+}
+
+async function reloadCfg() {
+  try {
+    const res = await apiRequest('/nginx/reload', { method: 'POST' });
+    showMsg(res.success ? 'Nginx herladen.' : 'Herenladen mislukt.', res.success ? 'success' : 'error');
+    loadCfg();
+  } catch (e) {
+    showMsg('Herenladen mislukt: ' + e.message, 'error');
+  }
+}
+
+async function toggleCfg(id, enable) {
+  const endpoint = enable ? '/enable' : '/disable';
+  try {
+    await apiRequest(`/nginx/configs/${id}${endpoint}`, { method: 'POST' });
+    loadCfg();
+  } catch (e) {
+    alert('Wijzigen mislukt: ' + (e.data?.details || e.message));
+  }
+}
+
+async function removeCfg(id) {
+  if (!confirm('Weet u zeker dat u deze configuratie wilt verwijderen?')) return;
+  try {
+    await apiRequest(`/nginx/configs/${id}`, { method: 'DELETE' });
+    window.location.href = '/nginx';
+  } catch (e) {
+    alert('Verwijderen mislukt: ' + (e.data?.details || e.message));
+  }
+}
+
+editor.addEventListener('focus', () => { editor.removeAttribute('readonly'); });
+loadCfg();
+</script>

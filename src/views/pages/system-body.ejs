@@ -1,0 +1,90 @@
+<div class="page-header">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <h1 class="page-title">Systeembeheer</h1>
+      <p class="page-subtitle">Beheer de Nginx-server en SSL-certificaten.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Nginx-server status</h3>
+    </div>
+    <div class="card-body">
+      <div id="server-status">
+        <div class="spinner" style="font-size:20px; padding:20px;">Laden…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Snel acties</h3>
+    </div>
+    <div class="card-body">
+      <div class="actions-grid">
+        <div class="action-item" onclick="runSystemCmd('start')" title="Start Nginx">
+          <div class="action-icon"><i data-lucide="play-circle" style="color: #22c55e;"></i></div>
+          <div class="action-label">Start</div>
+        </div>
+        <div class="action-item" onclick="runSystemCmd('stop')" title="Stop Nginx">
+          <div class="action-icon"><i data-lucide="pause-circle" style="color: #f87171;"></i></div>
+          <div class="action-label">Stop</div>
+        </div>
+        <div class="action-item" onclick="runSystemCmd('restart')" title="Herstart Nginx">
+          <div class="action-icon"><i data-lucide="reload" style="color: #e6e6e6;"></i></div>
+          <div class="action-label">Herstart</div>
+        </div>
+        <div class="action-item" onclick="runSystemCmd('reload')" title="Herladen Nginx">
+          <div class="action-icon"><i data-lucide="refresh-cw" style="color: #63b3e8;"></i></div>
+          <div class="action-label">Herladen</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function runSystemCmd(cmd) {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" class="spinner"></i> Bezig…';
+  try {
+    const { success, stdout, stderr } = await apiRequest('/system/' + cmd, { method: 'POST' });
+    if (!success) throw new Error(stderr || 'Onbekende fout');
+    alert('Succes: ' + (stdout || 'Actie uitgevoerd'));
+    loadServerStatus();
+  } catch (e) {
+    alert('Fout: ' + (e.data?.details || e.message));
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = cmd.charAt(0).toUpperCase() + cmd.slice(1);
+  }
+}
+
+async function loadServerStatus() {
+  try {
+    const { running, version } = await apiRequest('/system/status');
+    const statusClass = running ? 'running' : 'stopped';
+    const statusText = running ? 'Actief' : 'Stilgezet';
+    const icon = running ? 'play-circle' : 'pause-circle';
+    const iconColor = running ? '#22c55e' : '#f87171';
+    
+    document.getElementById('server-status').innerHTML = `
+      <div class="server-status-item">
+        <span><i data-lucide="${icon}" style="color: ${iconColor};"></i> ${statusText}</span>
+      </div>
+      ${version ? `<div><strong>Versie:</strong> ${version}</div>` : ''}
+    `;
+    lucide.createIcons();
+  } catch (e) {
+    document.getElementById('server-status').innerHTML = '<p class="error">Fout bij laden status</p>';
+  }
+}
+
+loadServerStatus();
+</script>

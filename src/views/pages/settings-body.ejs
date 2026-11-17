@@ -1,0 +1,49 @@
+<div class="page-header">
+  <h1 class="page-title">Instellingen</h1>
+  <p class="page-subtitle">Applicatie- en serverinstellingen.</p>
+</div>
+
+<div class="section">
+  <div class="table-wrap">
+    <table id="settings-table">
+      <thead>
+        <tr><th>Sleutel</th><th>Waarde</th><th>Gevoelig</th><th>Bijgewerkt</th><th>Actie</th></tr>
+      </thead>
+      <tbody id="settings-tbody"><tr><td colspan="5" class="empty" style="padding:24px">Laden…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadSettings() {
+  const tbody = document.getElementById('settings-tbody');
+  try {
+    const { settings } = await apiRequest('/settings');
+    tbody.innerHTML = settings.map(s => `
+      <tr>
+        <td><code>${s.key}</code></td>
+        <td>${s.sensitive ? '***masked***' : (s.value || '—')}</td>
+        <td><span class="badge ${s.sensitive ? 'badge-warning' : 'badge-neutral'}">${s.sensitive ? 'Ja' : 'Nee'}</span></td>
+        <td>${formatDate(s.updatedAt)}</td>
+        <td>
+          ${s.sensitive ? '<span class="btn btn-sm btn-outline" style="pointer-events:none;opacity:0.6">Bewerkt via .env</span>' : `<input type="text" id="val-${s.key}" value="${s.value || ''}" style="width:140px;padding:4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text)"> <button class="btn btn-sm btn-outline" onclick="saveSetting('${s.key}')">Opslaan</button>`}
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="empty" style="padding:24px">Geen instellingen.</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty" style="padding:24px">Fout: ${e.message}</td></tr>`;
+  }
+}
+
+async function saveSetting(key) {
+  const val = document.getElementById(`val-${key}`).value;
+  try {
+    await apiRequest(`/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value: val }) });
+    alert('Opgeslagen.');
+    loadSettings();
+  } catch (e) {
+    alert('Mislukt: ' + e.message);
+  }
+}
+loadSettings();
+</script>

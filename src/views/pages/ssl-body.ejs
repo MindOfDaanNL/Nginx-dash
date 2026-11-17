@@ -1,0 +1,154 @@
+<div class="page-header">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <h1 class="page-title">SSL-certificaten</h1>
+      <p class="page-subtitle">Beheer Let's Encrypt-certificaten via Certbot.</p>
+    </div>
+    <% if (user.role === 'admin') { %>
+    <button class="btn btn-primary" onclick="openRequestModal()">Certificaat aanvragen</button>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-actions" style="margin-bottom:16px;">
+    <% if (user.role === 'admin') { %>
+    <button class="btn btn-sm btn-outline" onclick="renewAll()">Alle certificaten verlengen</button>
+    <button class="btn btn-sm btn-outline" onclick="renewTest()">Droogloop verlenging</button>
+    <% } %>
+    <button class="btn btn-sm btn-outline" onclick="loadCerts()">Verversen</button>
+  </div>
+  <div class="table-wrap">
+    <table id="certs-table">
+      <thead>
+        <tr><th>Naam</th><th>Domeinen</th><th>Uitgever</th><th>Vervalt</th><th>Status</th><th>Acties</th></tr>
+      </thead>
+      <tbody id="certs-tbody"><tr><td colspan="6" class="empty" style="padding:24px">Laden…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Request modal -->
+<div class="modal-overlay" id="request-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">SSL-certificaat aanvragen</span><button class="close-btn" onclick="closeRequestModal()">&times;</button></div>
+    <div class="modal-body">
+      <form id="request-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label>Domeinnaam</label>
+            <input type="text" name="domain" required placeholder="example.com">
+          </div>
+          <div class="field row">
+            <label>Extra domeinen (optioneel)</label>
+            <input type="text" name="additionalDomains" placeholder="www.example.com, api.example.com">
+          </div>
+          <div class="field">
+            <label>E-mailadres</label>
+            <input type="email" name="email" required placeholder="admin@example.com">
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="agree" required> Ik ga akkoord met de Let's Encrypt-abonnee-overeenkomst
+          </label>
+        </div>
+        <div id="request-err" style="color:var(--danger); font-size:12px; margin-top:10px; display:none;"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeRequestModal()">Annuleren</button>
+      <button class="btn btn-primary" id="request-submit">Aanvragen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const requestModal = document.getElementById('request-modal');
+function openRequestModal() {
+  document.getElementById('request-form').reset();
+  document.getElementById('request-err').style.display = 'none';
+  requestModal.classList.add('open');
+}
+function closeRequestModal() {
+  requestModal.classList.remove('open');
+}
+window.addEventListener('click', (e) => { if (e.target === requestModal) closeRequestModal(); });
+
+async function loadCerts() {
+  const tbody = document.getElementById('certs-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty" style="padding:24px">Laden…</td></tr>';
+  try {
+    const { certificates } = await apiRequest('/ssl/certificates');
+    tbody.innerHTML = certificates.map(c => `
+      <tr>
+        <td><strong>${c.certificate_name}</strong></td>
+        <td>${JSON.parse(c.domains || '[]').join(', ')}</td>
+        <td>${c.issuer || '—'}</td>
+        <td>${formatDate(c.expires_at)}</td>
+        <td><span class="badge ${c.status === 'active' ? 'badge-success' : 'badge-danger'}">${c.status}</span></td>
+        <td>
+          <% if (user.role === 'admin') { %>
+          <button class="btn btn-sm btn-danger" onclick="removeCert(${c.id}, '${c.certificate_name.replace(/'/g, "\\'")}')">Verwijderen</button>
+          <% } %>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="empty" style="padding:24px">Geen certificaten gevonden.</td></tr>';
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="padding:24px">Fout: ${e.message}</td></tr>`;
+  }
+}
+
+async function renewAll() {
+  try {
+    const res = await apiRequest('/ssl/renew', { method: 'POST' });
+    alert(res.success ? 'Verlenging gestart.' : 'Verlenging mislukt: ' + res.error);
+    loadCerts();
+  } catch (e) {
+    alert('Mislukt: ' + e.message);
+  }
+}
+
+async function renewTest() {
+  try {
+    const res = await apiRequest('/ssl/renew', { method: 'POST', body: JSON.stringify({ dryRun: true }) });
+    alert(res.success ? 'Droogloop geslaagd.' : 'Droogloop mislukt: ' + res.error);
+  } catch (e) {
+    alert('Mislukt: ' + e.message);
+  }
+}
+
+async function removeCert(id, name) {
+  if (!confirm(`Verwijder certificaat "${name}"?`)) return;
+  try {
+    await apiRequest(`/ssl/certificates/${id}`, { method: 'DELETE' });
+    loadCerts();
+  } catch (e) {
+    alert('Mislukt: ' + e.message);
+  }
+}
+
+document.getElementById('request-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('request-submit');
+  const err = document.getElementById('request-err');
+  const form = e.target;
+  const domains = [form.domain.value, ...form.additionalDomains.value.split(',').map(d => d.trim()).filter(Boolean)];
+  btn.disabled = true; btn.textContent = 'Aanvragen…';
+  try {
+    await apiRequest('/ssl/request', {
+      method: 'POST',
+      body: JSON.stringify({ domain: form.domain.value, additionalDomains: domains.slice(1), email: form.email.value })
+    });
+    closeRequestModal();
+    loadCerts();
+  } catch (errObj) {
+    err.textContent = errObj.data?.details || errObj.message || 'Mislukt';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Aanvragen';
+  }
+});
+
+loadCerts();
+</script>
